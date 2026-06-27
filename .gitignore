@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# Beads / local agent tooling
+.beads/
+.dolt/
+*.db
+.beads-credential-key
+
+# Hermes runtime (user-local, not shipped)
+.hermes/
+
+# IDE / agent
+.claude/
+.codex/
+.grok/
+.agents/
+.cursor/
+
+# OS / secrets
+.env
+*.pem
+.DS_Store
+
+# Local dev noise
+node_modules/
+*.log
+plugins/goal/
+
+# Local documentation
+docs/*

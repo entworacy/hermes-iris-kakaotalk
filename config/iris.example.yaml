@@ -1,0 +1,33 @@
+# Copy relevant sections into ~/.hermes/config.yaml
+
+plugins:
+  enabled:
+    - iris-platform          # after: hermes plugins install .../plugins/platforms/iris
+    # - platforms/iris      # after: ./scripts/install.sh (symlink layout)
+
+platform_hints:
+  iris:
+    replace: >
+      카카오톡(Iris)에서 사용자의 개인 비서로 응답합니다. 정중한 해요체, 친근하지만
+      프로페셔널하게. 마크다운·이모지 없이 카톡 순수 텍스트로 답하세요.
+
+gateway:
+  platforms:
+    iris:
+      enabled: true
+      extra:
+        host: "192.168.0.42"
+        port: 3000
+        allowed_chat_ids:
+          - "123456789012345"
+        talk_version: "26.1.0"
+        channel_prompts:
+          _default: >
+            카카오톡 개인 비서 톤을 유지하세요. 짧은 인사에도 성의 있게 응대합니다.
+
+# Environment overrides (optional):
+# IRIS_HOST=192.168.0.42
+# IRIS_PORT=3000
+# IRIS_ALLOWED_CHAT_IDS=123456789012345
+# IRIS_ALLOW_ALL_USERS=true
+# IRIS_CHECK_REACTION=false

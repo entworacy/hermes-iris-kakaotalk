@@ -1,0 +1,77 @@
+name: iris-platform
+label: Iris (KakaoTalk)
+kind: platform
+version: 0.2.0
+description: >
+  KakaoTalk messaging platform adapter using Iris (Android DB observer).
+  Hermes connects as WebSocket client to Iris /ws for inbound and uses
+  HTTP /reply for outbound (text + images via base64, image_multiple for batches).
+  Non-image files fall back to a text notice (Iris API has no document type).
+  Inbound file messages (Kakao type 18) are parsed as DOCUMENT attachments.
+  Reply messages (type 26 / src_logId) fetch quoted content via Iris /query and
+  cache quoted images locally (Telegram-style) for vision tools.
+  Optional Kakao CHECK reaction on inbound (off by default; set IRIS_CHECK_REACTION=true).
+  Resolves open-chat member roles (HOST/MANAGER/NORMAL/BOT) and profile avatars via Iris /query.
+  Optional user_id filter (IRIS_USER_ID_FILTER) works alongside allowed_chat_ids.
+  Uses talk-pilsner API (kakao-react protocol); credentials come from Iris GET /aot.
+  Bundled skills (iris-gateway, iris-chat-assistant) install to ~/.hermes/skills/
+  on plugin load and auto-load on registered iris chats (override with IRIS_AUTO_SKILLS).
+  Uses internal chat_id as stable room key. Only allowed_chat_ids receive agent
+  replies; unregistered rooms are ignored except !cr (show chat_id) and !adcr
+  (auto-register room to allowed_chat_ids in config.yaml).
+
+author: "Hermes + user"
+requires_env:
+  - name: IRIS_HOST
+    description: "Iris가 실행 중인 Android 기기의 IP 또는 호스트명 (WS/HTTP 대상)"
+    prompt: "Iris host IP"
+    password: false
+  - name: IRIS_PORT
+    description: "Iris bot HTTP 포트 (보통 3000)"
+    prompt: "Iris port"
+    password: false
+optional_env:
+  - name: IRIS_BASE_URL
+    description: "전체 base URL (host+port 대신 사용 가능)"
+    prompt: "Iris base URL (or empty)"
+    password: false
+  - name: IRIS_ALLOWED_CHAT_IDS
+    description: "응답할 chat_id 쉼표 목록 (비우면 전체)"
+    prompt: "Allowed chat IDs (comma-separated)"
+    password: false
+  - name: IRIS_BOT_ID
+    description: "Iris botId (미설정 시 connect 시 GET /config에서 자동 조회). 참가자 역할·복호화에 사용"
+    prompt: "Iris bot ID (or empty for auto-fetch)"
+    password: false
+  - name: IRIS_BOT_NAME
+    description: "Iris 봇 표시 이름 (GET /config 자동 조회 시 bot_name 보조, 기본 Iris)"
+    prompt: "Iris bot display name (or empty)"
+    password: false
+  - name: IRIS_CHECK_REACTION
+    description: "수신 메시지에 체크(✅) 리액션 남기기 (기본 비활성, true/1/yes/on으로 활성화)"
+    prompt: "Leave check reaction on inbound? (true/false, default false)"
+    password: false
+  - name: IRIS_TALK_VERSION
+    description: "Kakao talk-agent 버전 (기본 26.1.0, 기기 카톡 버전과 맞출 것)"
+    prompt: "Kakao talk-agent version"
+    password: false
+  - name: IRIS_HOME_CHANNEL
+    description: "cron/알림 기본 chat_id"
+    prompt: "Home channel chat_id (or empty)"
+    password: false
+  - name: IRIS_AUTO_SKILLS
+    description: "Iris 대화 시 자동 로드할 스킬 (쉼표 구분, 기본 iris-chat-assistant)"
+    prompt: "Auto-load skills (comma-separated, or empty for default)"
+    password: false
+  - name: IRIS_USER_ID_FILTER
+    description: "user_id 기반 인바운드 필터 활성화 (true/1/yes/on, 기본 비활성)"
+    prompt: "Enable user_id filter? (true/false, default false)"
+    password: false
+  - name: IRIS_ALLOWED_USER_IDS
+    description: "IRIS_USER_ID_FILTER=true일 때 응답할 user_id 쉼표 목록 (chat_id 필터와 AND)"
+    prompt: "Allowed user IDs (comma-separated)"
+    password: false
+platform_hint: >
+  카카오톡(Iris)에서 사용자의 개인 비서로 응답합니다. 정중한 해요체, 친근하지만 프로페셔널하게.
+  답변은 핵심→필요 시 부연→(선택)다음 행동 제안 순으로. 짧은 인사에도 성의 있게 응대하고
+  "네." 한 줄로 끝내지 않습니다. 마크다운·코드블록·이모지 남용 없이 카톡 순수 텍스트로.
