@@ -102,6 +102,63 @@ gateway:
 
 환경 변수: `IRIS_ALLOWED_CHAT_IDS=123456789012345,987654321098765` (쉼표 구분)
 
+### `user_id` 구분법
+
+카카오톡 메시지에는 **방 식별자**(`chat_id`)와 **발신자 식별자**(`user_id`)가 따로 있습니다.
+
+| 필드 | 의미 | 확인 방법 |
+|------|------|-----------|
+| `chat_id` | 채팅방 ID | 해당 방에서 `!cr` 전송 |
+| `user_id` | 메시지 보낸 사람 ID | Iris `/query`로 `chat_logs.user_id` 조회, 또는 WS 인바운드 `event.source.user_id` |
+
+#### 숫자 범위로 보는 발신자 유형
+
+플러그인은 `user_id` 숫자 크기로 발신자 종류를 나눕니다 (`participant.py` 기준).
+
+| 조건 | 유형 | 오픈챗 역할 (`sender_member_type`) |
+|------|------|-------------------------------------|
+| `user_id` < 10,000,000,000 (100억) | 일반 카톡 유저 (실프로필·1:1·일반 단톡) | 없음 — 키 자체 생략 |
+| `user_id` ≥ 10,000,000,000 | 오픈채팅 멤버 | `HOST` / `MANAGER` / `NORMAL` 조회 |
+| `user_id` == `bot_id` | Iris 봇 계정 | `BOT` |
+
+`bot_id`는 Iris `GET /config`에서 자동 조회됩니다. 이름 복호화(`/decrypt`) 시 `user_id` 인자에는 **항상 `bot_id`** 를 넣습니다 (발신자 `user_id`가 아님).
+
+#### 특정 사용자만 응답하기 (선택)
+
+기본값은 **방(`chat_id`)만** 필터링하고, `user_id`는 모두 허용합니다.  
+특정 사용자의 메시지에만 응답하려면 `user_id` 화이트리스트를 켭니다 (`chat_id` 필터와 **AND**).
+
+```yaml
+gateway:
+  platforms:
+    iris:
+      extra:
+        allowed_chat_ids:
+          - "123456789012345"
+        user_id_filter_enabled: true
+        allowed_user_ids:
+          - "987654321098765"   # 응답 허용할 user_id
+```
+
+환경 변수:
+
+```bash
+IRIS_USER_ID_FILTER=true
+IRIS_ALLOWED_USER_IDS=987654321098765,111222333444555
+```
+
+`user_id_filter_enabled`가 `false`(기본)이면 `allowed_user_ids`는 무시됩니다.
+
+#### `user_id` 조회 예시 (Iris `/query`)
+
+```sql
+SELECT user_id, message, created_at
+FROM chat_logs
+WHERE chat_id = ?
+ORDER BY _id DESC
+LIMIT 20
+```
+
 ## 개발 · 테스트
 
 ```bash
