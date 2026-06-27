@@ -25,7 +25,8 @@ hermes plugins install entworacy/hermes-iris-kakaotalk/plugins/platforms/iris
 pip install websockets
 
 # 4. 대화형 설정 (Iris IP·포트·허용 방)
-hermes setup iris
+hermes gateway setup
+# 메뉴에서 Iris (KakaoTalk) 선택
 
 # 5. 게이트웨이 시작
 hermes gateway run

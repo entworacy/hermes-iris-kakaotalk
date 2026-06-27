@@ -96,6 +96,7 @@ def test_register_smoke(monkeypatch):
     assert 'pii_safe' in call_kwargs
     assert call_kwargs.get('is_connected') is not None
     assert call_kwargs.get('standalone_sender_fn') is not None
+    assert call_kwargs.get('setup_fn') is not None
 
 def test_resolve_iris_channel_prompt_prefers_chat_id_then_default(monkeypatch):
     from plugins.platforms.iris.adapter import IrisAdapter

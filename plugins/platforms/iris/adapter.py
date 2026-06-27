@@ -771,8 +771,54 @@ class IrisAdapter(BasePlatformAdapter):
     async def get_chat_info(self, chat_id: str) -> Dict[str, Any]:
         return {'name': chat_id, 'type': 'group'}
 
+def _enable_iris_platform_in_config() -> None:
+    path = resolve_hermes_config_path()
+    if path is None:
+        return
+    try:
+        from utils import atomic_roundtrip_yaml_update
+        atomic_roundtrip_yaml_update(path, 'gateway.platforms.iris.enabled', True)
+    except Exception:
+        try:
+            import yaml
+            path.parent.mkdir(parents=True, exist_ok=True)
+            data: Dict[str, Any] = {}
+            if path.exists():
+                loaded = yaml.safe_load(path.read_text(encoding='utf-8'))
+                if isinstance(loaded, dict):
+                    data = loaded
+            gateway = data.setdefault('gateway', {})
+            platforms = gateway.setdefault('platforms', {})
+            iris = platforms.setdefault('iris', {})
+            iris['enabled'] = True
+            path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding='utf-8')
+        except Exception as e:
+            logger.warning('Iris: failed to enable platform in config.yaml: %s', e)
+
+def interactive_setup() -> None:
+    from hermes_cli.setup import get_env_value, print_header, print_info, print_success, print_warning, prompt, save_env_value
+    print_header('Iris (KakaoTalk)')
+    print_info('루팅 Android의 Iris 서버에 연결합니다. WS 수신에는 pip install websockets 가 필요합니다.')
+    host = prompt('Iris host IP', default=get_env_value('IRIS_HOST') or '')
+    if not str(host).strip():
+        print_warning('IRIS_HOST가 필요합니다. 설정을 건너뜁니다.')
+        return
+    save_env_value('IRIS_HOST', str(host).strip())
+    port = prompt('Iris port', default=get_env_value('IRIS_PORT') or '3000')
+    port_text = str(port).strip() or '3000'
+    try:
+        save_env_value('IRIS_PORT', str(int(port_text)))
+    except ValueError:
+        print_warning(f'잘못된 포트입니다. 기본값 3000을 사용합니다.')
+        save_env_value('IRIS_PORT', '3000')
+    allowed = prompt('Allowed chat IDs (comma-separated, optional)', default=get_env_value('IRIS_ALLOWED_CHAT_IDS') or '')
+    if str(allowed).strip():
+        save_env_value('IRIS_ALLOWED_CHAT_IDS', str(allowed).strip())
+    _enable_iris_platform_in_config()
+    print_success('Iris 설정 완료. 게이트웨이 재시작: hermes gateway restart')
+
 def register_platform(ctx) -> None:
-    ctx.register_platform(name='iris', label='Iris (KakaoTalk)', adapter_factory=lambda cfg: IrisAdapter(cfg), check_fn=check_requirements, validate_config=validate_config, is_connected=is_connected, required_env=['IRIS_HOST', 'IRIS_PORT'], install_hint='Iris on rooted Android required. For WS receive: pip install websockets. See https://github.com/dolidolih/Iris and irispy-client for image formats.', env_enablement_fn=_env_enablement, cron_deliver_env_var='IRIS_HOME_CHANNEL', standalone_sender_fn=_standalone_send, allowed_users_env='IRIS_ALLOWED_USER_IDS', allow_all_env='IRIS_ALLOW_ALL_USERS', emoji='💬', platform_hint='카카오톡(Iris)에서 사용자의 개인 비서로 응답합니다. 정중한 해요체, 친근하지만 프로페셔널하게. 답변은 핵심→필요 시 부연→(선택)다음 행동 제안 순으로. 짧은 인사에도 성의 있게 응대하고 "네." 한 줄로 끝내지 않습니다. 마크다운·코드블록·이모지 남용 없이 카톡 순수 텍스트로.', pii_safe=False, allow_update_command=True)
+    ctx.register_platform(name='iris', label='Iris (KakaoTalk)', adapter_factory=lambda cfg: IrisAdapter(cfg), check_fn=check_requirements, validate_config=validate_config, is_connected=is_connected, required_env=['IRIS_HOST', 'IRIS_PORT'], install_hint='Iris on rooted Android required. For WS receive: pip install websockets. See https://github.com/dolidolih/Iris and irispy-client for image formats.', env_enablement_fn=_env_enablement, cron_deliver_env_var='IRIS_HOME_CHANNEL', standalone_sender_fn=_standalone_send, allowed_users_env='IRIS_ALLOWED_USER_IDS', allow_all_env='IRIS_ALLOW_ALL_USERS', emoji='💬', platform_hint='카카오톡(Iris)에서 사용자의 개인 비서로 응답합니다. 정중한 해요체, 친근하지만 프로페셔널하게. 답변은 핵심→필요 시 부연→(선택)다음 행동 제안 순으로. 짧은 인사에도 성의 있게 응대하고 "네." 한 줄로 끝내지 않습니다. 마크다운·코드블록·이모지 남용 없이 카톡 순수 텍스트로.', pii_safe=False, allow_update_command=True, setup_fn=interactive_setup)
 register = register_platform
 from .kakao_payload import append_reply_note as _append_reply_note, chat_log_row_to_reply_context, extract_src_log_id, is_adcr_command, is_cr_command, is_reply_message, is_self_message
 from .media import attachment_to_base64 as _attachment_to_base64, cache_inbound_media_url

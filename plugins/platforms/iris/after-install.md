@@ -9,8 +9,9 @@
 
 2. **Iris 연결 설정**:
    ```bash
-   hermes setup iris
+   hermes gateway setup
    ```
+   (메뉴에서 **Iris (KakaoTalk)** 선택)
    또는 `~/.hermes/config.yaml`에 `gateway.platforms.iris` 추가  
    (예시: 저장소의 `config/iris.example.yaml`)
 

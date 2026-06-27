@@ -67,7 +67,7 @@ PY
 
 echo ""
 echo "Next steps:"
-echo "  1. hermes setup iris          # Iris host/port, allowed rooms"
+echo "  1. hermes gateway setup       # pick Iris (KakaoTalk) in menu"
 echo "  2. hermes gateway run         # start gateway"
 echo ""
 echo "Example config: $REPO_ROOT/config/iris.example.yaml"
