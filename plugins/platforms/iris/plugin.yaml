@@ -71,6 +71,10 @@ optional_env:
     description: "IRIS_USER_ID_FILTER=true일 때 응답할 user_id 쉼표 목록 (chat_id 필터와 AND)"
     prompt: "Allowed user IDs (comma-separated)"
     password: false
+  - name: IRIS_ALLOW_ALL_USERS
+    description: "Gateway 사용자 인가 우회 (기본 true, false로 명시 시에만 유저 화이트리스트 적용)"
+    prompt: "Allow all Iris users at gateway layer? (true/false, default true)"
+    password: false
 platform_hint: >
   카카오톡(Iris)에서 사용자의 개인 비서로 응답합니다. 정중한 해요체, 친근하지만 프로페셔널하게.
   답변은 핵심→필요 시 부연→(선택)다음 행동 제안 순으로. 짧은 인사에도 성의 있게 응대하고

@@ -46,6 +46,16 @@ def _env_flag_enabled(name: str, *, default: bool=False) -> bool:
         return default
     return str(raw).strip().lower() in _TRUTHY_ENV_VALUES
 
+def _ensure_iris_allow_all_users_default() -> None:
+    """Gateway user auth for Iris defaults to open; room gating stays on allowed_chat_ids."""
+    raw = os.getenv('IRIS_ALLOW_ALL_USERS')
+    if raw is None or not str(raw).strip():
+        os.environ['IRIS_ALLOW_ALL_USERS'] = 'true'
+
+def iris_allow_all_users_enabled() -> bool:
+    _ensure_iris_allow_all_users_default()
+    return _env_flag_enabled('IRIS_ALLOW_ALL_USERS', default=True)
+
 def check_requirements() -> bool:
     host = os.getenv('IRIS_HOST') or ''
     port = os.getenv('IRIS_PORT') or ''
@@ -814,10 +824,13 @@ def interactive_setup() -> None:
     allowed = prompt('Allowed chat IDs (comma-separated, optional)', default=get_env_value('IRIS_ALLOWED_CHAT_IDS') or '')
     if str(allowed).strip():
         save_env_value('IRIS_ALLOWED_CHAT_IDS', str(allowed).strip())
+    if not str(get_env_value('IRIS_ALLOW_ALL_USERS') or '').strip():
+        save_env_value('IRIS_ALLOW_ALL_USERS', 'true')
     _enable_iris_platform_in_config()
     print_success('Iris 설정 완료. 게이트웨이 재시작: hermes gateway restart')
 
 def register_platform(ctx) -> None:
+    _ensure_iris_allow_all_users_default()
     ctx.register_platform(name='iris', label='Iris (KakaoTalk)', adapter_factory=lambda cfg: IrisAdapter(cfg), check_fn=check_requirements, validate_config=validate_config, is_connected=is_connected, required_env=['IRIS_HOST', 'IRIS_PORT'], install_hint='Iris on rooted Android required. For WS receive: pip install websockets. See https://github.com/dolidolih/Iris and irispy-client for image formats.', env_enablement_fn=_env_enablement, cron_deliver_env_var='IRIS_HOME_CHANNEL', standalone_sender_fn=_standalone_send, allowed_users_env='IRIS_ALLOWED_USER_IDS', allow_all_env='IRIS_ALLOW_ALL_USERS', emoji='💬', platform_hint='카카오톡(Iris)에서 사용자의 개인 비서로 응답합니다. 정중한 해요체, 친근하지만 프로페셔널하게. 답변은 핵심→필요 시 부연→(선택)다음 행동 제안 순으로. 짧은 인사에도 성의 있게 응대하고 "네." 한 줄로 끝내지 않습니다. 마크다운·코드블록·이모지 남용 없이 카톡 순수 텍스트로.', pii_safe=False, allow_update_command=True, setup_fn=interactive_setup)
 register = register_platform
 from .kakao_payload import append_reply_note as _append_reply_note, chat_log_row_to_reply_context, extract_src_log_id, is_adcr_command, is_cr_command, is_reply_message, is_self_message
