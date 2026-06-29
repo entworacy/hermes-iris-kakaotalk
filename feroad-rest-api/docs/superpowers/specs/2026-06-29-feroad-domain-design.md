@@ -44,8 +44,9 @@ flowchart TB
     Organization --> Supply
     Organization --> Booking
     Supply --> Booking
-    Pot -->|event: PotFormed| Booking
-    Pot -.->|event: PotFormed| Rfq
+    Pot -->|event: PotFormed| Supply
+    Supply -->|event: EphemeralRouteActivated| Booking
+    Pot -.->|event: EphemeralRouteActivated| Rfq
     Booking --> Contract
     Contract -.-> Payment
     Booking -.-> Boarding
@@ -114,7 +115,7 @@ flowchart TB
 
 ## 3. Supply (공급 카탈로그)
 
-셔틀 업체가 등록하는 운행 상품.
+셔틀 업체가 등록하는 운행 상품 + **Pot에서 파생되는 1회성 노선**.
 
 | Aggregate | 상태 | 이벤트 |
 |-----------|------|--------|
@@ -123,8 +124,49 @@ flowchart TB
 | `RouteSchedule` | Route 종속 | `ScheduleAdded` |
 | `Stop` | Route 종속 | `StopAdded` |
 
-- `RouteType`: `Fixed`(정기), `Flexible`(맞춤) — MVP는 Fixed 중심
-- `Route(status=active)`가 마켓플레이스 노출 단위 (별도 Listing aggregate 없음)
+### Route 분류
+
+| `RouteOrigin` | 설명 | 카탈로그 노출 |
+|---------------|------|---------------|
+| `Catalog` | 업체가 직접 등록한 정기/맞춤 노선 | O (`Fixed` / `Flexible`) |
+| `Pot` | Pot 매칭 성립 시 **자동 생성되는 1회성 노선** | X (비공개) |
+
+- `RouteType`: `Fixed`(정기), `Flexible`(맞춤), **`Ephemeral`(1회성)**
+- 카탈로그 경로: `RouteOrigin::Catalog` + `Route(status=active)`가 마켓플레이스 노출 단위
+- Pot 경로: `RouteOrigin::Pot { pot_id }` + `RouteType::Ephemeral` — **해당 Pot 전용, 운행 1회 후 archive**
+
+### Ephemeral Route (1회성 노선)
+
+Pot BC가 `PotFormed`를 발행하면 Supply BC가 이벤트 핸들러로 **1회성 노선을 생성**합니다. 기존 카탈로그 노선을 검색·매칭하는 것이 아니라, Pot 멤버의 이동 수요를 물리적 노선 aggregate로 구체화합니다.
+
+| 필드 | 설명 |
+|------|------|
+| `pot_id` | 생성 원인 Pot |
+| `origin` | `RouteOrigin::Pot` |
+| `route_type` | `Ephemeral` |
+| `service_date` | Pot 공통 이용일 |
+| `departure_time` | Pot 합의 출발 시각 |
+| `stops` | 멤버별 pickup(`StopType::Pickup`) + 공통/개별 dropoff |
+| `schedule` | 1개의 `RouteSchedule` (해당 일자 1회 운행) |
+| `capacity` | Pot `max_capacity` (= 멤버 총 인원 상한) |
+| `operator_org_id` | 선택 — MVP는 `None`, 2차 RFQ로 업체 배정 |
+
+| 상태 | 설명 |
+|------|------|
+| `draft` | 생성 직후 (정류장·스케줄 조립 중) |
+| `active` | 예약·중개 가능 |
+| `completed` | 운행 완료 |
+| `archived` | 1회 운행 종료 후 자동 종료 |
+
+| 이벤트 |
+|--------|
+| `EphemeralRouteCreated`, `EphemeralRouteActivated`, `EphemeralRouteCompleted`, `EphemeralRouteArchived` |
+
+불변식:
+- `Ephemeral` 노선은 카탈로그 검색·Discover API에 노출되지 않음
+- `pot_id`당 활성 `Ephemeral` 노선은 최대 1개
+- `service_date` 경과 시 `active` → `archived` (스케줄러 또는 이벤트)
+- Pot에서 생성된 노선은 업체 수동 수정 불가 — 멤버 Intent 스냅샷 기반으로만 생성
 
 ---
 
@@ -201,19 +243,21 @@ Tinder 핵심 — **양방향 Like**일 때만 성립.
 | `members` | `PotMember[]` (intent_id, user_id) |
 | `min_members` | 성립 최소 인원 (기본 2) |
 | `max_capacity` | 차량 수용 상한 힌트 |
+| `route_id` | 1회성 노선 생성 후 Supply가 할당한 Route ID |
 
 | 상태 | 설명 |
 |------|------|
 | `gathering` | 멤버 모집·매칭 중 |
 | `formed` | 최소 인원 충족, 중개 가능 |
-| `converting` | Booking/RFQ 전환 중 |
-| `converted` | 예약·계약으로 전환 완료 |
+| `spawning_route` | 1회성 노선 생성 중 (Supply 핸들러 처리) |
+| `route_spawned` | Ephemeral Route 생성·활성화 완료 |
+| `converted` | 멤버 예약·계약 전환 완료 |
 | `dissolved` | 인원 부족·전원 이탈로 해산 |
 | `expired` | 서비스일 경과 |
 
 | 이벤트 |
 |--------|
-| `PotCreated`, `PotMemberJoined`, `PotMemberLeft`, `PotFormed`, `PotDissolved`, `PotExpired`, `PotConverted` |
+| `PotCreated`, `PotMemberJoined`, `PotMemberLeft`, `PotFormed`, `PotRouteSpawned`, `PotDissolved`, `PotExpired`, `PotConverted` |
 
 ### Domain Service: CompatibilityScorer
 
@@ -238,7 +282,9 @@ sequenceDiagram
     participant U1 as User A
     participant U2 as User B
     participant PotBC as Pot BC
+    participant Supply as Supply BC
     participant Booking as Booking BC
+    participant Contract as Contract BC
 
     U1->>PotBC: PostRideIntent
     PotBC-->>PotBC: RideIntentPosted
@@ -260,17 +306,28 @@ sequenceDiagram
     Note over PotBC: min_members 충족 시
     PotBC-->>PotBC: PotFormed
 
-    PotBC-->>Booking: PotFormed event
-    Booking-->>Booking: CreateGroupBooking
+    PotBC-->>Supply: PotFormed event
+    Supply-->>Supply: CreateEphemeralRoute
+    Supply-->>Supply: EphemeralRouteActivated
+
+    Supply-->>PotBC: EphemeralRouteActivated event
+    PotBC-->>PotBC: PotRouteSpawned
+
+    Supply-->>Booking: EphemeralRouteActivated event
+    Booking-->>Booking: CreateMemberBookings
+
+    Booking-->>Contract: BookingConfirmed event
+    Contract-->>Contract: ContractActivated
 ```
 
 ### Pot ↔ 다른 BC 관계
 
 | 방향 | 메커니즘 | 목적 |
 |------|----------|------|
-| Pot → Booking | `PotFormed` 이벤트 | 그룹 예약 생성 (`source=pot`, `pot_id` 연결) |
-| Pot → Supply | ACL `FlexibleRouteMatchPort` (2차) | formed Pot에 맞는 Flexible 노선/업체 탐색 |
-| Pot → RFQ (2차) | `PotFormed` 이벤트 | 맞춤 운행 견적 요청 |
+| Pot → Supply | `PotFormed` 이벤트 | **1회성 Ephemeral Route 자동 생성** |
+| Supply → Pot | `EphemeralRouteActivated` 이벤트 | Pot에 `route_id` 반영 (`PotRouteSpawned`) |
+| Supply → Booking | `EphemeralRouteActivated` 이벤트 | Pot 멤버 전원 예약 생성 |
+| Supply → RFQ (2차) | `EphemeralRouteActivated` 이벤트 | 업체 배정·견적 요청 |
 | Identity → Pot | ACL `UserProfilePort` | 활성 사용자 검증 |
 | Organization → Pot | ACL `CorporateMembershipPort` | 기업 소속 Intent 검증 |
 
@@ -282,7 +339,8 @@ sequenceDiagram
 | GET | `/api/v1/pot/intents/discover` | 호환 Intent 피드 (Tinder 카드) |
 | POST | `/api/v1/pot/intents/{id}/like` | Like 전송 |
 | POST | `/api/v1/pot/intents/{id}/pass` | Pass (기록만, 재노출 감소) |
-| GET | `/api/v1/pot/pots/{id}` | Pot 상세·멤버 |
+| GET | `/api/v1/pot/pots/{id}` | Pot 상세·멤버·연결된 1회성 노선 |
+| GET | `/api/v1/pot/pots/{id}/route` | Pot에서 생성된 Ephemeral Route 조회 |
 | DELETE | `/api/v1/pot/intents/{id}` | Intent 철회 |
 
 ---
@@ -293,19 +351,21 @@ sequenceDiagram
 |-----------|------|--------|
 | `Booking` | `requested` → `pending_approval`* → `confirmed` → `cancelled` / `completed` | `BookingRequested`, `BookingConfirmed` |
 
-\* Flexible route 또는 Pot 기반 그룹 예약 시 `pending_approval` 가능
+\* Catalog `Flexible` route는 `pending_approval`; Pot 유래 예약은 Ephemeral Route 활성화 후 자동 생성
 
 ### 수요 출처 (source)
 
 | `booking_source` | 설명 |
 |------------------|------|
 | `catalog` | Supply 카탈로그에서 직접 예약 |
-| `pot` | PotFormed 후 그룹 예약으로 전환 |
+| `pot` | Pot → **Ephemeral Route** → 멤버별 예약 |
 | `corporate` | 기업 단체 등록 |
 
-Pot 연동:
-- `PotConverted` 핸들러가 `Booking(source=pot, pot_id, member_user_ids[])` 생성
-- 개별 멤버별 Booking row 또는 1개 그룹 Booking + 참여자 목록 — 구현 시 그룹 Booking 1건 + `BookingParticipant` 엔티티 권장
+Pot 연동 (1회성 노선 경유):
+- `EphemeralRouteActivated` 핸들러가 Pot 멤버마다 `Booking(source=pot, pot_id, route_id)` 생성
+- 각 Booking은 생성된 1회성 노선의 pickup/dropoff stop에 연결
+- 구현: 멤버당 Booking 1건 + 공통 `route_id` / `pot_id` 참조
+- Pot 기반 예약은 기존 카탈로그 노선 검색과 **독립** — 항상 신규 Ephemeral Route에 귀속
 
 ---
 
@@ -316,7 +376,7 @@ Pot 연동:
 | `BrokerageContract` | `draft` → `active` → `terminated` | `ContractDrafted`, `ContractActivated` |
 
 - `BookingConfirmed` 구독 → 계약 생성
-- Pot 유래 예약: `brokerage_type = pot_group`, `pot_id` 스냅샷 포함
+- Pot 유래 예약: `brokerage_type = pot_ephemeral`, `pot_id` + `route_id`(1회성) 스냅샷 포함
 
 ---
 
@@ -328,11 +388,16 @@ Pot 연동:
 RouteActivated → BookingRequested → BookingConfirmed → ContractActivated
 ```
 
-### 경로 B: Pot 동행 매칭
+### 경로 B: Pot 동행 매칭 → 1회성 노선
 
 ```
 RideIntentPosted → IntentLiked → MutualMatchFormed → PotMemberJoined
-  → PotFormed → BookingRequested(source=pot) → BookingConfirmed → ContractActivated
+  → PotFormed
+  → EphemeralRouteCreated → EphemeralRouteActivated
+  → PotRouteSpawned
+  → BookingRequested(source=pot, route_id) × N멤버
+  → BookingConfirmed → ContractActivated
+  → (운행 후) EphemeralRouteCompleted → EphemeralRouteArchived
 ```
 
 ---
@@ -345,7 +410,13 @@ src/
 ├── identity/
 ├── organization/
 ├── supply/
-├── pot/                    # 신규
+│   ├── application/
+│   │   └── command/
+│   │       └── spawn_ephemeral_route_from_pot.rs
+│   └── infrastructure/
+│       └── event_handlers/
+│           └── pot_formed_handler.rs         # PotFormed → 1회성 Route 생성
+├── pot/
 │   ├── domain/
 │   │   ├── model/
 │   │   │   ├── ride_intent.rs
@@ -366,8 +437,11 @@ src/
 │   └── infrastructure/
 │       ├── repository/
 │       └── event_handlers/
-│           └── pot_formed_handler.rs  # → Booking BC 트리거
+│           └── pot_route_spawned_handler.rs  # EphemeralRouteActivated → Pot 상태 갱신
 ├── booking/
+│   └── infrastructure/
+│       └── event_handlers/
+│           └── ephemeral_route_activated_handler.rs  # 멤버 Booking 생성
 ├── contract/
 ├── api/v1/
 └── infrastructure/
@@ -384,6 +458,8 @@ src/
 | 매칭 | Match / MutualMatch | Pot |
 | 동행 그룹 | Pot | Pot |
 | 동행 성립 | PotFormed | Pot |
+| 1회성 노선 | Ephemeral Route | Supply |
+| 노선 출처 | RouteOrigin (Catalog / Pot) | Supply |
 | 이용자 | User / Rider | Identity |
 | 셔틀 업체 | Operator Organization | Organization |
 | 노선 | Route | Supply |
@@ -397,13 +473,14 @@ src/
 ### 포함
 
 - Identity, Organization, Supply, **Pot**, Booking, Contract
-- Pot: RideIntent, Like/Match, Pot lifecycle, PotFormed → Booking 연동
-- 카탈로그 직접 예약 + Pot 그룹 예약 2경로
+- Pot: RideIntent, Like/Match, Pot lifecycle
+- **PotFormed → Ephemeral Route(1회성) 자동 생성 → 멤버 Booking** 전체 체인
+- 카탈로그 직접 예약 + Pot 1회성 노선 예약 2경로
 
 ### 제외 (2차)
 
 - Payment, Notification, Boarding, Tracking
-- RFQ / 업체 입찰 (PotFormed 후 RFQ는 2차 — 이벤트 훅만 정의)
+- RFQ / 업체 입찰 (EphemeralRouteActivated 후 업체 배정 — 2차, 이벤트 훅만 정의)
 - Mobiall급 Match Pool legal gate, Joint Request, Trip Crew
 - 관리자 SSR
 
@@ -413,5 +490,6 @@ src/
 
 - RideIntent / Match / Pot aggregate 단위 테스트 (상태 전이·불변식)
 - MutualMatch 양방향 Like 시나리오 테스트
-- PotFormed → Booking 생성 이벤트 체인 통합 테스트
+- PotFormed → EphemeralRouteActivated → Booking 생성 이벤트 체인 통합 테스트
+- Ephemeral Route: pot_id당 1개, 카탈로그 미노출, 운행 후 archive 불변식 테스트
 - BC 경계 import 금지 모듈 테스트
