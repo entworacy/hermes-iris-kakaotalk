@@ -1,1 +1,0 @@
-/root/feroad-rest-api/target/debug/libferoad_rest_api.rlib: /root/feroad-rest-api/src/config.rs /root/feroad-rest-api/src/error.rs /root/feroad-rest-api/src/lib.rs /root/feroad-rest-api/src/routes/health.rs /root/feroad-rest-api/src/routes/mod.rs
