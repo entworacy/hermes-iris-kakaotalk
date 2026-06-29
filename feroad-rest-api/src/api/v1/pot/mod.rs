@@ -1,1 +1,2 @@
-// REST handlers wired in Task 13 — domain layer complete
+pub mod dto;
+pub mod handlers;

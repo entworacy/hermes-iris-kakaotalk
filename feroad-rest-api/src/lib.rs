@@ -14,8 +14,14 @@ pub mod supply;
 use axum::Router;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
+use crate::infrastructure::app_state::AppState;
+
 pub fn create_router() -> Router {
-    routes::create_routes()
+    create_router_with_state(AppState::new())
+}
+
+pub fn create_router_with_state(state: AppState) -> Router {
+    routes::create_routes(state)
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
 }

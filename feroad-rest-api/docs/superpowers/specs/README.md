@@ -8,4 +8,4 @@
 
 | 문서 | 설명 | 상태 |
 |------|------|------|
-| [2026-06-29-feroad-domain-mvp.md](../plans/2026-06-29-feroad-domain-mvp.md) | MVP 6 BC + Pot/Ephemeral 이벤트 체인 구현 | in_progress |
+| [2026-06-29-feroad-domain-mvp.md](../plans/2026-06-29-feroad-domain-mvp.md) | MVP 6 BC + Pot/Ephemeral 이벤트 체인 + REST API | completed |
