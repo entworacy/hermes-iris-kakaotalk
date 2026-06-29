@@ -1,0 +1,1 @@
+// REST handlers wired in Task 14 — domain layer complete

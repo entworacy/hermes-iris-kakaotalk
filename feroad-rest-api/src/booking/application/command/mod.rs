@@ -1,0 +1,1 @@
+pub mod request_catalog_booking;
